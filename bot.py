@@ -79,5 +79,4 @@ class MyBotHandler(object):
         if words[0] == "set":
             self.set(words, message, bot_handler)
 
-
 handler_class = MyBotHandler
