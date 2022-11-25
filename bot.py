@@ -1,9 +1,24 @@
 import requests
 import random
 from datetime import date
+from zulip_bots import lib
 
 class MyBotHandler(object):
     display_recipient: str = 'coffee-machine'
+    message: dict
+    bot_handler: lib.ExternalBotHandler
+
+    def send(self, content: str, to:str = None, subject: str = None):
+        if to == None:
+            to = self.message['display_recipient']
+        if subject == None:
+            subject = self.message['subject']
+        self.bot_handler.send_message(dict(
+            type='stream',
+            to=to,
+            subject=subject,
+            content=content,
+        ))
 
     def usage(self):
         return '''    Daily xkcd:
@@ -17,66 +32,52 @@ class MyBotHandler(object):
             stream: set the default stream for the daily command
         '''
 
-    def daily(self, bot_handler):
+    def daily(self):
         xkcd_json = requests.get('https://xkcd.com/info.0.json').json()
-        bot_handler.send_message(dict(
-            type='stream',
-            to=self.display_recipient,
-            subject=date.today().strftime("%y/%m/%d"),
-            content="[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")",
-        ))
+        self.send("[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")",
+                  self.display_recipient,
+                  subject=date.today().strftime("%y/%m/%d"))
 
-    def get(self, message, bot_handler):
-        xkcd_json = requests.get('https://xkcd.com/info.0.json').json()
-        bot_handler.send_message(dict(
-            type='stream',
-            to=message['display_recipient'],
-            subject=message['subject'],
-            content="[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")",
-        ))
-
-    def rdm(self, message, bot_handler):
+    def get(self, words: list):
+        if len(words) == 1:
+            xkcd_json = requests.get('https://xkcd.com/info.0.json').json()
+            self.send("[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")")
+            return
+        try:
+            num = int(words[1])
+        except:
+            return
+        xkcd_json = requests.get("https://xkcd.com/" + str(num) + "/info.0.json").json()
+        self.send("[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")")
+        
+    def rdm(self):
         xkcd_json = requests.get('https://xkcd.com/info.0.json').json()
         rdm = random.randrange(0, xkcd_json['num'])
         xkcd_json = requests.get("https://xkcd.com/" + str(rdm) + "/info.0.json").json()
-        bot_handler.send_message(dict(
-            type='stream',
-            to=message['display_recipient'],
-            subject=message['subject'],
-            content="[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")",
-        ))
+        self.send("[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")")
 
-    def set(self, words: list, message, bot_handler):
+    def set(self, words: list):
         if words[1] == "stream":
             self.display_recipient = words[2]
-            bot_handler.send_message(dict(
-                type='stream',
-                to=message['display_recipient'],
-                subject=message['subject'],
-                content="The default stream has been set to \"" + self.display_recipient +"\"",
-            ))
-
+            self.send("The default stream has been set to \"" + self.display_recipient +"\"")
 
     def handle_message(self, message, bot_handler):
         if message['is_me_message'] == True:
             return
+        self.message = message
+        self.bot_handler = bot_handler
         content: str = message['content']
 
         if content == "usage" or content == "-h":
-            bot_handler.send_message(dict(
-                type='stream',
-                to=message['display_recipient'],
-                subject=message['subject'],
-                content=self.usage(),
-            ))
-        if content == "get":
-            self.get(message, bot_handler)
+            self.send(self.usage())
         if content == "rdm":
-            self.rdm(message, bot_handler)
+            self.rdm()
         if content == "daily":
-            self.daily(bot_handler)
+            self.daily()
         words = content.split(' ')
+        if words[0] == "get":
+            self.get(words)
         if words[0] == "set":
-            self.set(words, message, bot_handler)
+            self.set(words)
 
 handler_class = MyBotHandler
