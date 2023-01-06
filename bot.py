@@ -1,5 +1,7 @@
 import requests
 import random
+import time
+import schedule
 from datetime import date
 from zulip_bots import lib
 
@@ -8,7 +10,7 @@ class MyBotHandler(object):
     message: dict
     bot_handler: lib.ExternalBotHandler
 
-    def send(self, content: str, to:str = None, subject: str = None):
+    def send(self, content: str, to: str = None, subject: str = None):
         if to == None:
             to = self.message['display_recipient']
         if subject == None:
@@ -26,6 +28,7 @@ class MyBotHandler(object):
     USAGE:
         usage: print this text
         daily: sent the daily xkct in a subject named by the today date
+        loop: loop the bot on a daily xkcd for a specific hour
         get: sent the daily xkct in your subjet
         rdm: sent a random xkct in your subjet
         set:
@@ -35,8 +38,15 @@ class MyBotHandler(object):
     def daily(self):
         xkcd_json = requests.get('https://xkcd.com/info.0.json').json()
         self.send("[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")",
-                  self.display_recipient,
-                  subject=date.today().strftime("%y/%m/%d"))
+               self.display_recipient,
+               subject=date.today().strftime("%y/%m/%d"))
+
+    def loop_daily(self, words: list):
+        schedule.every().day.at(words[1]).do(self.daily)
+        self.send("Loop started for " + words[1])
+        while (True):
+            schedule.run_pending()
+            time.sleep(60)
 
     def get(self, words: list):
         if len(words) == 1:
@@ -49,7 +59,7 @@ class MyBotHandler(object):
             return
         xkcd_json = requests.get("https://xkcd.com/" + str(num) + "/info.0.json").json()
         self.send("[" + xkcd_json['alt'] + "](" + xkcd_json['img'] + ")")
-        
+
     def rdm(self):
         xkcd_json = requests.get('https://xkcd.com/info.0.json').json()
         rdm = random.randrange(0, xkcd_json['num'])
@@ -59,7 +69,7 @@ class MyBotHandler(object):
     def set(self, words: list):
         if words[1] == "stream":
             self.display_recipient = words[2]
-            self.send("The default stream has been set to \"" + self.display_recipient +"\"")
+            self.send("The default stream has been set to \"" + self.display_recipient + "\"")
 
     def handle_message(self, message, bot_handler):
         if message['is_me_message'] == True:
@@ -75,6 +85,8 @@ class MyBotHandler(object):
         if content == "daily":
             self.daily()
         words = content.split(' ')
+        if words[0] == "loop":
+            self.loop_daily(words)
         if words[0] == "get":
             self.get(words)
         if words[0] == "set":
